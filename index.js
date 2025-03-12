@@ -72,7 +72,7 @@ async function verifyFacebookToken(userToken) {
  */
 app.post('/auth', async (req, res) => {
     const { token } = req.body;
-    console.log(req)
+    console.log(req.body)
     // if (!token) return res.status(400).json({ error: "Access token required" });
 
     // const fbData = await verifyFacebookToken(token);

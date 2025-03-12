@@ -22,10 +22,10 @@ const REDIS_PORT = process.env.REDIS_PORT;
 app.use(express.json());
 app.use(cors());
 
-// Connect to MongoDB
-mongoose.connect("mongodb://localhost:27017/ludo_game", { useNewUrlParser: true, useUnifiedTopology: true })
+mongoose.connect(MONGO_URI)
     .then(() => console.log("✅ MongoDB Connected"))
     .catch(err => console.error("❌ MongoDB Connection Error:", err));
+
 
 // Connect to Redis
 const redisClient = redis.createClient({ host: REDIS_HOST, port: REDIS_PORT });

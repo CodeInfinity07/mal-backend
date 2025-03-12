@@ -73,13 +73,14 @@ async function verifyFacebookToken(userToken) {
  */
 app.post('/auth', async (req, res) => {
     const { token } = req.body;
-    console.log(req.body)
-    // if (!token) return res.status(400).json({ error: "Access token required" });
+    console.log(token)
+    if (!token) return res.status(400).json({ error: "Access token required" });
 
-    // const fbData = await verifyFacebookToken(token);
-    // if (!fbData || !fbData.user_id) {
-    //     return res.status(401).json({ error: "Invalid or expired token" });
-    // }
+    const fbData = await verifyFacebookToken(token);
+    if (!fbData || !fbData.user_id) {
+        console.log(fbData)
+        return res.status(401).json({ error: "Invalid or expired token" });
+    }
 
     // const userId = fbData.user_id;
     // let user = await User.findOne({ userId });

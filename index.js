@@ -72,51 +72,49 @@ async function verifyFacebookToken(userToken) {
  */
 app.post('/auth', async (req, res) => {
     const { token } = req.body;
-    if (!token) return res.status(400).json({ error: "Access token required" });
+    console.log(token)
+    // if (!token) return res.status(400).json({ error: "Access token required" });
 
-    const fbData = await verifyFacebookToken(token);
-    if (!fbData || !fbData.user_id) {
-        return res.status(401).json({ error: "Invalid or expired token" });
-    }
+    // const fbData = await verifyFacebookToken(token);
+    // if (!fbData || !fbData.user_id) {
+    //     return res.status(401).json({ error: "Invalid or expired token" });
+    // }
 
-    const userId = fbData.user_id;
-    let user = await User.findOne({ userId });
+    // const userId = fbData.user_id;
+    // let user = await User.findOne({ userId });
 
-    if (!user) {
-        const uniqueGameId = crypto.randomBytes(4).toString("hex").toUpperCase();
-        user = new User({
-            userId,
-            uniqueGameId,
-            name: fbData.name || "Unknown Player",
-            profilePic: fbData.picture?.data?.url || "",
-            country: "Unknown",
-            coins: 2500,
-            gems: 250
-        });
-        await user.save();
-    }
+    // if (!user) {
+    //     const uniqueGameId = crypto.randomBytes(4).toString("hex").toUpperCase();
+    //     user = new User({
+    //         userId,
+    //         uniqueGameId,
+    //         name: fbData.name || "Unknown Player",
+    //         profilePic: fbData.picture?.data?.url || "",
+    //         country: "Unknown",
+    //         coins: 2500,
+    //         gems: 250
+    //     });
+    //     await user.save();
+    // }
 
-    const authToken = generateAuthToken();
-    redisClient.setex(`auth:${authToken}`, 3600, userId);
+    // const authToken = generateAuthToken();
+    // redisClient.setex(`auth:${authToken}`, 3600, userId);
 
-    res.json({
-        success: true,
-        token: authToken,
-        user: {
-            userId: user.userId,
-            uniqueGameId: user.uniqueGameId,
-            name: user.name,
-            profilePic: user.profilePic,
-            country: user.country,
-            coins: user.coins,
-            gems: user.gems
-        }
-    });
+    // res.json({
+    //     success: true,
+    //     token: authToken,
+    //     user: {
+    //         userId: user.userId,
+    //         uniqueGameId: user.uniqueGameId,
+    //         name: user.name,
+    //         profilePic: user.profilePic,
+    //         country: user.country,
+    //         coins: user.coins,
+    //         gems: user.gems
+    //     }
+    // });
 });
 
-/**
- * WebSocket Authentication Middleware
- */
 io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token;
     if (!token) {

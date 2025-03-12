@@ -54,10 +54,10 @@ function generateAuthToken() {
 }
 
 async function fetchUserData(token) {
-    const url = `https://graph.facebook.com/v18.0/me?fields=id,name&access_token=${token}`;
+    const url = `https://graph.facebook.com/v18.0/me?fields=id,name,gender,friends&access_token=${token}`;
     try {
         const response = await axios.get(url);
-        console.log("User Data:", response.data);
+        return response.data
     } catch (error) {
         console.error("Error fetching user data:", error.response ? error.response.data : error.message);
     }

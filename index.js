@@ -78,9 +78,11 @@ app.post('/auth', async (req, res) => {
 
     const fbData = await verifyFacebookToken(token);
     if (!fbData || !fbData.user_id) {
-        console.log(fbData)
         return res.status(401).json({ error: "Invalid or expired token" });
     }
+
+    console.log(fbData)
+
 
     // const userId = fbData.user_id;
     // let user = await User.findOne({ userId });

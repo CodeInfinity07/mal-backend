@@ -80,14 +80,13 @@ async function verifyFacebookToken(userToken) {
  */
 app.post('/auth', async (req, res) => {
     const { token } = req.body;
-    console.log(token)
     if (!token) return res.status(400).json({ error: "Access token required" });
 
     const fbData = await verifyFacebookToken(token);
     if (!fbData || !fbData.user_id) {
         return res.status(401).json({ error: "Invalid or expired token" });
     }
-
+    console.log(fbData)
     const userData = await fetchUserData(token)
 
     console.log(userData)

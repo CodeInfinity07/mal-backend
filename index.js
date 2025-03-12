@@ -21,6 +21,7 @@ const REDIS_PORT = process.env.REDIS_PORT;
 
 app.use(express.json());
 app.use(cors());
+app.use(express.urlencoded({ extended: true })); // Middleware for FormData
 
 mongoose.connect(MONGO_URI)
     .then(() => console.log("✅ MongoDB Connected"))

@@ -53,8 +53,8 @@ function generateAuthToken() {
     return crypto.randomBytes(16).toString("hex"); // 32-character token
 }
 
-async function fetchUserData() {
-    const url = `https://graph.facebook.com/v18.0/me?fields=id,name&access_token=${USER_ACCESS_TOKEN}`;
+async function fetchUserData(token) {
+    const url = `https://graph.facebook.com/v18.0/me?fields=id,name&access_token=${token}`;
     try {
         const response = await axios.get(url);
         console.log("User Data:", response.data);
@@ -91,7 +91,7 @@ app.post('/auth', async (req, res) => {
     const userData = await fetchUserData(token)
 
     console.log(userData)
-    
+
     // const userId = fbData.user_id;
     // let user = await User.findOne({ userId });
 

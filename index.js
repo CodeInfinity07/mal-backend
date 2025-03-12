@@ -1,109 +1,160 @@
 require('dotenv').config();
 const express = require('express');
-const { Server } = require('socket.io');
-const http = require('http');
 const axios = require('axios');
+const mongoose = require('mongoose');
+const redis = require('redis');
 const cors = require('cors');
-
-const APP_ID = process.env.FB_APP_ID;
-const APP_SECRET = process.env.FB_APP_SECRET;
-const PORT = process.env.PORT || 3000;
+const crypto = require('crypto');
+const http = require('http');
+const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-    cors: {
-        origin: '*', // Allow all origins for now, restrict this in production!
-        methods: ['GET', 'POST']
-    }
-});
+const io = new Server(server, { cors: { origin: '*', methods: ['GET', 'POST'] } });
+
+const PORT = process.env.PORT || 3000;
+const FB_APP_ID = process.env.FB_APP_ID;
+const FB_APP_SECRET = process.env.FB_APP_SECRET;
+const MONGO_URI = process.env.MONGO_URI;
+const REDIS_HOST = process.env.REDIS_HOST;
+const REDIS_PORT = process.env.REDIS_PORT;
 
 app.use(express.json());
 app.use(cors());
 
-const authenticatedUsers = new Map(); // Store authenticated users
+// Connect to MongoDB
+mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+    .then(() => console.log("✅ MongoDB Connected"))
+    .catch(err => console.error("❌ MongoDB Connection Error:", err));
+
+// Connect to Redis
+const redisClient = redis.createClient({ host: REDIS_HOST, port: REDIS_PORT });
+redisClient.on('connect', () => console.log("✅ Redis Connected"));
+redisClient.on('error', (err) => console.error("❌ Redis Error:", err));
+
+// User Schema
+const UserSchema = new mongoose.Schema({
+    userId: { type: String, unique: true, required: true },
+    uniqueGameId: { type: String, unique: true, required: true },
+    name: { type: String, required: true },
+    profilePic: { type: String, default: "" },
+    country: { type: String, default: "Unknown" },
+    coins: { type: Number, default: 2500 },
+    gems: { type: Number, default: 250 },
+    createdAt: { type: Date, default: Date.now }
+});
+const User = mongoose.model("User", UserSchema);
 
 /**
- * Verify Facebook OAuth token using Facebook Graph API
- * @param {string} userToken - The access token from the client
- * @returns {Promise<Object|null>} - Decoded token data if valid
+ * Generate a secure temporary token (UUID)
+ */
+function generateAuthToken() {
+    return crypto.randomBytes(16).toString("hex"); // 32-character token
+}
+
+/**
+ * Verify Facebook OAuth Token
  */
 async function verifyFacebookToken(userToken) {
     try {
-        const appToken = `${APP_ID}|${APP_SECRET}`;
+        const appToken = `${FB_APP_ID}|${FB_APP_SECRET}`;
         const url = `https://graph.facebook.com/debug_token?input_token=${userToken}&access_token=${appToken}`;
-        
         const response = await axios.get(url);
-        const data = response.data;
-
-        if (data.data && data.data.is_valid) {
-            return data.data; // Returns { user_id, expires_at, app_id, ... }
-        } else {
-            throw new Error('Invalid Facebook token');
-        }
+        return response.data.data || null;
     } catch (error) {
-        console.error('Error verifying Facebook token:', error.response ? error.response.data : error.message);
+        console.error("❌ Facebook Token Verification Failed:", error.response ? error.response.data : error.message);
         return null;
     }
 }
 
 /**
- * Express route to authenticate user
+ * Authentication Endpoint
  */
 app.post('/auth', async (req, res) => {
-    const { accessToken } = req.body;
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ error: "Access token required" });
 
-    if (!accessToken) {
-        return res.status(400).json({ error: 'Access token required' });
+    const fbData = await verifyFacebookToken(token);
+    if (!fbData || !fbData.user_id) {
+        return res.status(401).json({ error: "Invalid or expired token" });
     }
 
-    const fbData = await verifyFacebookToken(accessToken);
-    if (!fbData) {
-        return res.status(401).json({ error: 'Invalid or expired token' });
-    }
-
-    // Generate a temporary token for WebSocket authentication
     const userId = fbData.user_id;
-    const tempToken = `${userId}-${Date.now()}`; // Simple token (use JWT for better security)
+    let user = await User.findOne({ userId });
 
-    authenticatedUsers.set(tempToken, userId); // Store in-memory (Consider Redis for scalability)
+    if (!user) {
+        const uniqueGameId = crypto.randomBytes(4).toString("hex").toUpperCase();
+        user = new User({
+            userId,
+            uniqueGameId,
+            name: fbData.name || "Unknown Player",
+            profilePic: fbData.picture?.data?.url || "",
+            country: "Unknown",
+            coins: 2500,
+            gems: 250
+        });
+        await user.save();
+    }
 
-    res.json({ success: true, userId, token: tempToken });
-});
+    const authToken = generateAuthToken();
+    redisClient.setex(`auth:${authToken}`, 3600, userId);
 
-/**
- * Handle WebSocket Connections
- */
-io.on('connection', (socket) => {
-    console.log('A user connected:', socket.id);
-
-    // Handle authentication
-    socket.on('authenticate', (data) => {
-        const { token } = data;
-
-        if (!authenticatedUsers.has(token)) {
-            console.log('Authentication failed for', socket.id);
-            return socket.emit('auth_error', { error: 'Invalid token' });
+    res.json({
+        success: true,
+        token: authToken,
+        user: {
+            userId: user.userId,
+            uniqueGameId: user.uniqueGameId,
+            name: user.name,
+            profilePic: user.profilePic,
+            country: user.country,
+            coins: user.coins,
+            gems: user.gems
         }
-
-        const userId = authenticatedUsers.get(token);
-        console.log(`User ${userId} authenticated successfully.`);
-
-        socket.userId = userId; // Store user ID in the socket session
-        socket.emit('authenticated', { userId });
-
-        // Handle game-related events
-        socket.on('roll_dice', () => {
-            const diceRoll = Math.floor(Math.random() * 6) + 1;
-            io.emit('dice_result', { userId, diceRoll });
-        });
-
-        socket.on('disconnect', () => {
-            console.log(`User ${userId} disconnected`);
-        });
     });
 });
 
-server.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+/**
+ * WebSocket Authentication Middleware
+ */
+io.use(async (socket, next) => {
+    const token = socket.handshake.auth?.token;
+    if (!token) {
+        return next(new Error("Authentication required"));
+    }
+
+    redisClient.get(`auth:${token}`, (err, userId) => {
+        if (err || !userId) {
+            return next(new Error("Invalid or expired token"));
+        }
+        socket.userId = userId;
+        next();
+    });
 });
+
+/**
+ * WebSocket Connection Handling
+ */
+io.on('connection', (socket) => {
+    console.log(`✅ WebSocket Connected: User ${socket.userId}`);
+
+    socket.on('join_game', (gameId) => {
+        console.log(`User ${socket.userId} joined game ${gameId}`);
+        socket.join(gameId);
+        io.to(gameId).emit('player_joined', { userId: socket.userId });
+    });
+
+    socket.on('roll_dice', (gameId) => {
+        const diceRoll = Math.floor(Math.random() * 6) + 1;
+        io.to(gameId).emit('dice_result', { userId: socket.userId, diceRoll });
+    });
+
+    socket.on('disconnect', () => {
+        console.log(`❌ User ${socket.userId} disconnected`);
+    });
+});
+
+/**
+ * Start Server
+ */
+server.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));

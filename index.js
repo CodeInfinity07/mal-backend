@@ -53,9 +53,16 @@ function generateAuthToken() {
     return crypto.randomBytes(16).toString("hex"); // 32-character token
 }
 
-/**
- * Verify Facebook OAuth Token
- */
+async function fetchUserData() {
+    const url = `https://graph.facebook.com/v18.0/me?fields=id,name&access_token=${USER_ACCESS_TOKEN}`;
+    try {
+        const response = await axios.get(url);
+        console.log("User Data:", response.data);
+    } catch (error) {
+        console.error("Error fetching user data:", error.response ? error.response.data : error.message);
+    }
+}
+
 async function verifyFacebookToken(userToken) {
     try {
         const appToken = `${FB_APP_ID}|${FB_APP_SECRET}`;
@@ -81,9 +88,10 @@ app.post('/auth', async (req, res) => {
         return res.status(401).json({ error: "Invalid or expired token" });
     }
 
-    console.log(fbData)
+    const userData = await fetchUserData(token)
 
-
+    console.log(userData)
+    
     // const userId = fbData.user_id;
     // let user = await User.findOne({ userId });
 
